@@ -1,133 +1,220 @@
 import streamlit as st
 import numpy as np
-import json
 import matplotlib.pyplot as plt
 import time
+import json
 
-st.title("Strandbeest-Mechanismus Simulation")
+# ---------------------------------------------------------------------
+# Hilfsfunktion: Schnitt zweier Kreise (exakte Geometrie)
+# ---------------------------------------------------------------------
+def circle_intersection(centerA, rA, centerB, rB, pick_upper=True):
+    """
+    Liefert (x,y) für den Schnittpunkt der beiden Kreise.
+    pick_upper=True wählt den 'oberen' Schnittpunkt (wenn es zwei gibt).
+    Gibt None zurück, falls kein Schnitt möglich.
+    """
+    A = np.array(centerA, dtype=float)
+    B = np.array(centerB, dtype=float)
+    d = np.linalg.norm(B - A)
+    if d > rA + rB or d < abs(rA - rB):
+        # Keine oder zu große Überlappung
+        return None
 
-# -------------------------------
-# (A) Eingabe der Gelenkpunkte
-# -------------------------------
-num_points = st.number_input("Anzahl Gelenkpunkte (ohne Mittelpunkt c):", 
-                             min_value=1, value=4, step=1)
+    # Formeln (klassische Kreisgeometrie)
+    a = (rA**2 - rB**2 + d**2) / (2 * d)
+    h = np.sqrt(max(rA**2 - a**2, 0.0))
 
-# Session State verwenden, um Werte beizubehalten
-if "points" not in st.session_state:
-    st.session_state["points"] = [(i * 10, 10.0) for i in range(num_points)]
+    M = A + a * (B - A) / d  # Mittelpunkt der Schnittlinie
+    # Senkrecht auf (B-A):
+    dir_vec = (B - A) / d
+    perp_vec = np.array([-dir_vec[1], dir_vec[0]])
 
-# Eingabe der Punkte
-points = []
-for i in range(num_points):
-    x_val = st.number_input(f"X-Koordinate für Punkt {i}", value=st.session_state["points"][i][0], key=f"px_{i}")
-    y_val = st.number_input(f"Y-Koordinate für Punkt {i}", value=st.session_state["points"][i][1], key=f"py_{i}")
-    points.append((x_val, y_val))
+    p_int_1 = M + h * perp_vec
+    p_int_2 = M - h * perp_vec
 
-st.session_state["points"] = points
+    if pick_upper:
+        return p_int_1 if p_int_1[1] > p_int_2[1] else p_int_2
+    else:
+        return p_int_1 if p_int_1[1] < p_int_2[1] else p_int_2
 
-# -------------------------------
-# (B) Automatischer Mittelpunkt c (fixiert)
-# -------------------------------
-c = (-30.0, 0.0)
-c_index = len(points)
-points.append(c)
+# ---------------------------------------------------------------------
+# UI Titel
+# ---------------------------------------------------------------------
+st.title("Fixe Gliederlängen: p0 rotiert um c, Coupler auf gekrümmter Bahn")
 
-st.write("**Automatisch hinzugefügter Mittelpunkt c:**", c)
+# ---------------------------------------------------------------------
+# (A) Eingabe: Punkte c (fix), p2 (fix), p0, p1
+# ---------------------------------------------------------------------
+st.subheader("1) Punkteingabe")
 
-# -------------------------------
-# (C) Automatische Verbindungen (Glieder)
-# -------------------------------
-auto_links = [(c_index, 0)]  # Verbindung von c zu p0
+# Fixe Punkte c und p2 (z. B. vom Nutzer definierbar)
+cx = st.number_input("c.x (fix)", value=-30.0)
+cy = st.number_input("c.y (fix)", value=0.0)
+c = (cx, cy)
 
-# Automatische Verbindung aller Punkte mit dem vorherigen Punkt
-for i in range(num_points - 1):
-    auto_links.append((i, i + 1))
+p2x = st.number_input("p2.x (fix)", value=0.0)
+p2y = st.number_input("p2.y (fix)", value=0.0)
+p2 = (p2x, p2y)
 
-# -------------------------------
-# (D) Speicherung in JSON
-# -------------------------------
-if st.button("Speichere Einstellungen in JSON"):
-    data = {
-        "points": points,
-        "links": auto_links
-    }
-    with open("mechanism.json", "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-    st.success("Einstellungen gespeichert!")
+# Bewegliche Punkte p0, p1 (Anfangskoordinaten)
+p0x = st.number_input("p0.x (Start)", value=-15.0)
+p0y = st.number_input("p0.y (Start)", value=10.0)
+p0_start = (p0x, p0y)
 
-# -------------------------------
-# (E) Laden & Berechnung
-# -------------------------------
-if st.button("Lade Einstellungen aus JSON"):
-    try:
-        with open("mechanism.json", "r", encoding="utf-8") as f:
-            data = json.load(f)
+p1x = st.number_input("p1.x (Start)", value=-10.0)
+p1y = st.number_input("p1.y (Start)", value=30.0)
+p1_start = (p1x, p1y)
 
-        st.session_state["loaded_points"] = data["points"]
-        st.session_state["loaded_links"] = data["links"]
-        st.success("Daten erfolgreich geladen!")
+# ---------------------------------------------------------------------
+# (B) Gliederlängen aus Anfangspositionen
+# ---------------------------------------------------------------------
+st.subheader("2) Gliederlängen (aus Startposition)")
 
-    except FileNotFoundError:
-        st.error("Die Datei 'mechanism.json' wurde nicht gefunden.")
-    except KeyError as e:
-        st.error(f"Fehlender Schlüssel in JSON: {e}")
-    except Exception as e:
-        st.error(f"Ein unbekannter Fehler ist aufgetreten: {e}")
+# 1) c -> p0
+L_c_p0 = np.linalg.norm(np.array(p0_start) - np.array(c))
+# 2) p0 -> p1
+L_p0_p1 = np.linalg.norm(np.array(p1_start) - np.array(p0_start))
+# 3) p1 -> p2
+L_p1_p2 = np.linalg.norm(np.array(p1_start) - np.array(p2))
 
-# beenden falls keine Punkte geladen sind
-if "loaded_points" not in st.session_state:
-    st.stop()
+st.write(f"Länge c->p0 = {L_c_p0:.3f}")
+st.write(f"Länge p0->p1 = {L_p0_p1:.3f}")
+st.write(f"Länge p1->p2 = {L_p1_p2:.3f}")
 
-loaded_points = st.session_state["loaded_points"]
-loaded_links = st.session_state["loaded_links"]
+# ---------------------------------------------------------------------
+# (C) Coupler-Auswahl
+# ---------------------------------------------------------------------
+st.subheader("3) Coupler-Auswahl")
+coupler_options = ["p1", "p2"]
+coupler_choice = st.selectbox("Welcher Punkt soll der 'Coupler' sein? (p2 bleibt sonst fix)", coupler_options)
+# Wenn coupler_choice = "p1", dann wird p1 per Kreis-Schnitt bestimmt, p2 bleibt fix
+# Wenn coupler_choice = "p2", dann wird p2 per Kreis-Schnitt bestimmt, p1 bleibt fix
 
-# -------------------------------
-# (F) Simulation der Bewegung
-# -------------------------------
-step_size = st.slider("Schrittweite des Winkels (Grad)", 1, 10, 2)
+# Um oben/unten Schnitt zu wählen
+pick_upper = st.checkbox("Oberen Schnittpunkt wählen?", value=True)
 
+# ---------------------------------------------------------------------
+# (D) Winkelsteuerung: p0 rotiert um c
+# ---------------------------------------------------------------------
+st.subheader("4) Animation/Steuerung")
+step_size = st.slider("Schrittweite (Grad pro Frame)", 1, 20, 5)
 if "theta" not in st.session_state:
-    st.session_state["theta"] = 0
+    st.session_state.theta = 0.0
+if "running" not in st.session_state:
+    st.session_state.running = False
 
-# Knopf für Animation → Setzt `animation_running` in Session State
-if st.button("Animation starten"):
-    st.session_state["animation_running"] = not st.session_state.get("animation_running", False)
+if st.button("Animation starten/stoppen"):
+    st.session_state.running = not st.session_state.running
 
-# Live-Update
+# ---------------------------------------------------------------------
+# (E) JSON Speichern/Laden (optional)
+# ---------------------------------------------------------------------
+col1, col2 = st.columns(2)
+with col1:
+    if st.button("Speichere Einstellungen in JSON"):
+        data = {
+            "c": c,
+            "p2": p2,
+            "p0_start": p0_start,
+            "p1_start": p1_start,
+            "L_c_p0": L_c_p0,
+            "L_p0_p1": L_p0_p1,
+            "L_p1_p2": L_p1_p2,
+            "coupler_choice": coupler_choice,
+            "pick_upper": pick_upper,
+            "step_size": step_size,
+            "theta": st.session_state.theta
+        }
+        with open("mechanism.json", "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        st.success("Einstellungen gespeichert: mechanism.json")
+
+with col2:
+    if st.button("Lade Einstellungen aus JSON"):
+        try:
+            with open("mechanism.json", "r", encoding="utf-8") as f:
+                data = json.load(f)
+            # Lade die Werte in Session State
+            st.session_state.theta = data["theta"]
+            st.session_state.running = False
+            # Keine automatische UI-Updates für Input-Felder in Streamlit,
+            # man könnte st.experimental_rerun() aufrufen oder 
+            # einen Trick mit st.session_state[...] Key-Bindings machen.
+            st.success("Einstellungen geladen! (UI-Eingaben evtl. neu setzen)")
+        except FileNotFoundError:
+            st.error("mechanism.json nicht gefunden.")
+        except Exception as e:
+            st.error(f"Fehler beim Laden: {e}")
+
+# ---------------------------------------------------------------------
+# (F) Animation: exakte Kreis-Schnitt-Berechnung
+# ---------------------------------------------------------------------
 plot_placeholder = st.empty()
 
-while st.session_state.get("animation_running", False):
-    st.session_state["theta"] += np.radians(step_size)
+while st.session_state.running:
+    st.session_state.theta += np.radians(step_size)
+    theta = st.session_state.theta
 
+    # 1) p0(t): rotiert um c
+    p0x_t = c[0] + L_c_p0 * np.cos(theta)
+    p0y_t = c[1] + L_c_p0 * np.sin(theta)
+    p0_t = np.array([p0x_t, p0y_t])
+
+    if coupler_choice == "p1":
+        # -> p2 fix
+        # p1 = Schnitt Kreis A (Mitte p0_t, Radius L_p0_p1)
+        #              Kreis B (Mitte p2,   Radius L_p1_p2)
+        p1_sol = circle_intersection(p0_t, L_p0_p1, p2, L_p1_p2, pick_upper=pick_upper)
+        if p1_sol is None:
+            # kein Schnitt -> Abbruch oder Überspringen
+            p1_sol = np.array([-999, -999])  # Dummy
+        p1_t = p1_sol
+        p2_t = np.array(p2)  # fix
+    else:
+        # coupler_choice == "p2" -> p1 fix
+        # p2 = Schnitt Kreis A (Mitte p1_start, Radius L_p1_p2)
+        #              Kreis B (Mitte p0_t,     Radius L_p0_p1)
+        # Achtung: Hier "p1_start" fix. (Du könntest auch "p1_start" = p1, 
+        # falls p1 anfangs fix sein soll.)
+        p1_t = np.array(p1_start)  # fix
+        p2_sol = circle_intersection(p0_t, L_p0_p1, p1_t, L_p1_p2, pick_upper=pick_upper)
+        if p2_sol is None:
+            p2_sol = np.array([-999, -999])
+        p2_t = p2_sol
+
+    # Plot
     fig, ax = plt.subplots()
+    # c, p0_t, p1_t, p2_t
+    ax.scatter([c[0]], [c[1]], color="green")
+    ax.text(c[0]+0.2, c[1], "c", color="green")
 
-    # p0 bewegt sich auf der Kreisbahn um c
-    r_p0 = np.linalg.norm(np.array(loaded_points[0]) - np.array(c))
-    p0_x = c[0] + r_p0 * np.cos(st.session_state["theta"])
-    p0_y = c[1] + r_p0 * np.sin(st.session_state["theta"])
-    loaded_points[0] = (p0_x, p0_y)
+    ax.scatter([p0_t[0]], [p0_t[1]], color="red")
+    ax.text(p0_t[0]+0.2, p0_t[1], "p0", color="red")
 
-    # Punkte zeichnen
-    xs = [p[0] for p in loaded_points]
-    ys = [p[1] for p in loaded_points]
-    ax.scatter(xs, ys, color='red')
+    ax.scatter([p1_t[0]], [p1_t[1]], color="red")
+    ax.text(p1_t[0]+0.2, p1_t[1], "p1", color="red")
 
-    for idx, (px, py) in enumerate(loaded_points):
-        ax.text(px + 0.3, py + 0.3, f"p{idx}", color='red')
+    ax.scatter([p2_t[0]], [p2_t[1]], color="red")
+    ax.text(p2_t[0]+0.2, p2_t[1], "p2", color="red")
 
-    # Glieder zeichnen
-    for (i, j) in loaded_links:
-        ax.plot([loaded_points[i][0], loaded_points[j][0]],
-                [loaded_points[i][1], loaded_points[j][1]], color='blue')
+    # Verbindungen
+    # c->p0
+    ax.plot([c[0], p0_t[0]], [c[1], p0_t[1]], color="blue", lw=2)
+    # p0->p1
+    ax.plot([p0_t[0], p1_t[0]], [p0_t[1], p1_t[1]], color="blue", lw=2)
+    # p1->p2
+    ax.plot([p1_t[0], p2_t[0]], [p1_t[1], p2_t[1]], color="blue", lw=2)
 
-    ax.set_xlim(-50, 50)
-    ax.set_ylim(-50, 50)
-    ax.set_xlabel("X-Koordinate")
-    ax.set_ylabel("Y-Koordinate")
-    ax.set_title(f"Mechanismus - Winkel: {np.degrees(st.session_state['theta']):.1f}°")
+    # Ggf. Kontrollkreise einzeichnen (optional)
+    # Kreis um c
+    circ_c = plt.Circle(c, L_c_p0, fill=False, color="gray", ls="--")
+    ax.add_patch(circ_c)
 
-    # **Live-Update über Streamlit**
+    # Achsen
+    ax.set_aspect("equal", "box")
+    ax.set_xlim(-60, 60)
+    ax.set_ylim(-30, 60)
+    ax.set_title(f"Winkel: {np.degrees(theta):.1f}°, Coupler: {coupler_choice}")
     plot_placeholder.pyplot(fig)
 
-    # **Verzögerung für Animation**
     time.sleep(0.1)
