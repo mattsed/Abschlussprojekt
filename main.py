@@ -40,115 +40,126 @@ def circle_intersection(centerA, rA, centerB, rB, pick_upper=True):
 # ---------------------------------------------------------------------
 # UI Titel
 # ---------------------------------------------------------------------
-st.title("Fixe Gliederlängen: p0 rotiert um c, Coupler auf gekrümmter Bahn")
+st.set_page_config(layout="wide")
+st.title("Mechanismus")
 
 # ---------------------------------------------------------------------
 # (A) Eingabe: Punkte c (fix), p2 (fix), p0, p1
 # ---------------------------------------------------------------------
-st.subheader("1) Punkteingabe")
 
 # Fixe Punkte c und p2 (z. B. vom Nutzer definierbar)
-cx = st.number_input("c.x (fix)", value=-30.0)
-cy = st.number_input("c.y (fix)", value=0.0)
-c = (cx, cy)
+with st.sidebar:
+    st.subheader("1) Punkteingabe")
 
-p2x = st.number_input("p2.x (fix)", value=0.0)
-p2y = st.number_input("p2.y (fix)", value=0.0)
-p2 = (p2x, p2y)
+    with st.expander("Mittelpunkt c"):
+        cx = st.number_input("X-Koordinate", value=-30.0, step=0.5, key="cx", format="%.2f")
+        cy = st.number_input("Y-Koordinate", value=0.0, step=0.5, key="cy", format="%.2f")
+        c = (cx, cy)
+    with st.expander("Fixpunkt p2"):
+        p2x = st.number_input("X-Koordinate", value=0.0, step=0.5, key="p2x", format="%.2f")
+        p2y = st.number_input("Y-Koordinate", value=0.0, step=0.5, key="p2y", format="%.2f")
+        p2 = (p2x, p2y)
+    with st.expander("Startpunkt p0"):
+        p0x = st.number_input("X-Koordinate", value=-15.0, step=0.5, key="p0x", format="%.2f")
+        p0y = st.number_input("Y-Koordinate", value=10.0, step=0.5, key="p0y", format="%.2f")
+        p0_start = (p0x, p0y)
+    with st.expander("Startpunkt p1"):
+        p1x = st.number_input("X-Koordinate", value=-10.0, step=0.5, key="p1x", format="%.2f")
+        p1y = st.number_input("Y-Koordinate", value=30.0, step=0.5, key="p1y", format="%.2f")
+        p1_start = (p1x, p1y)
 
-# Bewegliche Punkte p0, p1 (Anfangskoordinaten)
-p0x = st.number_input("p0.x (Start)", value=-15.0)
-p0y = st.number_input("p0.y (Start)", value=10.0)
-p0_start = (p0x, p0y)
+  
 
-p1x = st.number_input("p1.x (Start)", value=-10.0)
-p1y = st.number_input("p1.y (Start)", value=30.0)
-p1_start = (p1x, p1y)
 
 # ---------------------------------------------------------------------
 # (B) Gliederlängen aus Anfangspositionen
 # ---------------------------------------------------------------------
-st.subheader("2) Gliederlängen (aus Startposition)")
+with st.sidebar:
+    st.subheader("2) Gliederlängen (aus Startposition)")
 
-# 1) c -> p0
-L_c_p0 = np.linalg.norm(np.array(p0_start) - np.array(c))
-# 2) p0 -> p1
-L_p0_p1 = np.linalg.norm(np.array(p1_start) - np.array(p0_start))
-# 3) p1 -> p2
-L_p1_p2 = np.linalg.norm(np.array(p1_start) - np.array(p2))
+    # 1) c -> p0
+    L_c_p0 = np.linalg.norm(np.array(p0_start) - np.array(c))
+    # 2) p0 -> p1
+    L_p0_p1 = np.linalg.norm(np.array(p1_start) - np.array(p0_start))
+    # 3) p1 -> p2
+    L_p1_p2 = np.linalg.norm(np.array(p1_start) - np.array(p2))
 
-st.write(f"Länge c->p0 = {L_c_p0:.3f}")
-st.write(f"Länge p0->p1 = {L_p0_p1:.3f}")
-st.write(f"Länge p1->p2 = {L_p1_p2:.3f}")
+    st.write(f"Länge c->p0 = {L_c_p0:.3f}")
+    st.write(f"Länge p0->p1 = {L_p0_p1:.3f}")
+    st.write(f"Länge p1->p2 = {L_p1_p2:.3f}")
 
 # ---------------------------------------------------------------------
 # (C) Coupler-Auswahl
 # ---------------------------------------------------------------------
-st.subheader("3) Coupler-Auswahl")
-coupler_options = ["p1", "p2"]
-coupler_choice = st.selectbox("Welcher Punkt soll der 'Coupler' sein? (p2 bleibt sonst fix)", coupler_options)
-# Wenn coupler_choice = "p1", dann wird p1 per Kreis-Schnitt bestimmt, p2 bleibt fix
-# Wenn coupler_choice = "p2", dann wird p2 per Kreis-Schnitt bestimmt, p1 bleibt fix
+with st.sidebar:
+    st.subheader("3) Coupler-Auswahl")
+    coupler_options = ["p1", "p2"]
+    coupler_choice = st.selectbox("Welcher Punkt soll der 'Coupler' sein? (p2 bleibt sonst fix)", coupler_options)
+    # Wenn coupler_choice = "p1", dann wird p1 per Kreis-Schnitt bestimmt, p2 bleibt fix
+    # Wenn coupler_choice = "p2", dann wird p2 per Kreis-Schnitt bestimmt, p1 bleibt fix
 
-# Um oben/unten Schnitt zu wählen
-pick_upper = st.checkbox("Oberen Schnittpunkt wählen?", value=True)
+    # Um oben/unten Schnitt zu wählen
+    pick_upper = st.checkbox("Oberen Schnittpunkt wählen?", value=True)
 
 # ---------------------------------------------------------------------
 # (D) Winkelsteuerung: p0 rotiert um c
 # ---------------------------------------------------------------------
-st.subheader("4) Animation/Steuerung")
-step_size = st.slider("Schrittweite (Grad pro Frame)", 1, 20, 5)
+with st.sidebar:
+    st.subheader("4) Animation/Steuerung")
+    step_size = st.slider("Schrittweite (Grad pro Frame)", 1, 20, 5)
 if "theta" not in st.session_state:
     st.session_state.theta = 0.0
 if "running" not in st.session_state:
     st.session_state.running = False
-
-if st.button("Animation starten/stoppen"):
-    st.session_state.running = not st.session_state.running
+with st.sidebar:
+    if st.button("Animation starten/stoppen"):
+        st.session_state.running = not st.session_state.running
 
 # ---------------------------------------------------------------------
 # (E) JSON Speichern/Laden (optional)
 # ---------------------------------------------------------------------
-col1, col2 = st.columns(2)
-with col1:
-    if st.button("Speichere Einstellungen in JSON"):
-        data = {
-            "c": c,
-            "p2": p2,
-            "p0_start": p0_start,
-            "p1_start": p1_start,
-            "L_c_p0": L_c_p0,
-            "L_p0_p1": L_p0_p1,
-            "L_p1_p2": L_p1_p2,
-            "coupler_choice": coupler_choice,
-            "pick_upper": pick_upper,
-            "step_size": step_size,
-            "theta": st.session_state.theta
-        }
-        with open("mechanism.json", "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-        st.success("Einstellungen gespeichert: mechanism.json")
+with st.sidebar:
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("Speichere Einstellungen in JSON"):
+            data = {
+                "c": c,
+                "p2": p2,
+                "p0_start": p0_start,
+                "p1_start": p1_start,
+                "L_c_p0": L_c_p0,
+                "L_p0_p1": L_p0_p1,
+                "L_p1_p2": L_p1_p2,
+                "coupler_choice": coupler_choice,
+                "pick_upper": pick_upper,
+                "step_size": step_size,
+                "theta": st.session_state.theta
+            }
+            with open("mechanism.json", "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            st.success("Einstellungen gespeichert: mechanism.json")
 
-with col2:
-    if st.button("Lade Einstellungen aus JSON"):
-        try:
-            with open("mechanism.json", "r", encoding="utf-8") as f:
-                data = json.load(f)
-            # Lade die Werte in Session State
-            st.session_state.theta = data["theta"]
-            st.session_state.running = False
-            # Keine automatische UI-Updates für Input-Felder in Streamlit,
-            # man könnte st.experimental_rerun() aufrufen oder 
-            # einen Trick mit st.session_state[...] Key-Bindings machen.
-            st.success("Einstellungen geladen! (UI-Eingaben evtl. neu setzen)")
-        except FileNotFoundError:
-            st.error("mechanism.json nicht gefunden.")
-        except Exception as e:
-            st.error(f"Fehler beim Laden: {e}")
+    with col2:
+        if st.button("Lade Einstellungen aus JSON"):
+            try:
+                with open("mechanism.json", "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                # Lade die Werte in Session State
+                st.session_state.theta = data["theta"]
+                st.session_state.running = False
+                # Keine automatische UI-Updates für Input-Felder in Streamlit,
+                # man könnte st.experimental_rerun() aufrufen oder 
+                # einen Trick mit st.session_state[...] Key-Bindings machen.
+                st.success("Einstellungen geladen! (UI-Eingaben evtl. neu setzen)")
+            except FileNotFoundError:
+                st.error("mechanism.json nicht gefunden.")
+            except Exception as e:
+                st.error(f"Fehler beim Laden: {e}")
 
 # ---------------------------------------------------------------------
 # (F) Animation: exakte Kreis-Schnitt-Berechnung
 # ---------------------------------------------------------------------
+
 plot_placeholder = st.empty()
 
 while st.session_state.running:
